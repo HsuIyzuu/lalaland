@@ -261,8 +261,192 @@ $$d_{prop}$$:propagation delay
 
 we are sending a 30 Mbit MP3 file from a source host to a destination host. All links in the path between source and destination have a transmission rate of 10 Mbps. Assume that the propagation speed is 2 * 108 meters/sec, and the distance between source and destination is 10,000 km. Now suppose that the MP3 file is broken into 3 packets, each of 10 Mbits. Ignore headers that may be added to these packets. Also ignore router processing delays. Assuming store and forward packet switching at the router, the total delay is **<u>4.05 secs</u>**
 
+## Chapter 2-Application Layer
 
---------------------
+### 2.1_Principles of network applications
+
+- application: distributed interacting processes,exchanging messages
+
+- client-server, P2P paradigms
+- sockets, addressing
+- transport layer service--possible, available services
+- security and sockets
+
+<u>Our goals:</u> 
+
+- conceptual *and* implementation aspects of application-layer protocols
+
+  - transport-layer service models
+
+  - client-server paradigm
+
+  - peer-to-peer paradigm
+
+- learn about protocols by examining popular application-layer protocols and infrastructure
+
+  - HTTP
+  - SMTP, IMAP
+  - DNS
+  - video streaming systems, CDNs
+
+- programming network applications
+
+  - socket API
+
+#### creating a network app
+
+##### client-server
+
+server:
+
+- always-on host
+
+- permanent IP address
+
+- often in data centers, for scaling
+
+clients:
+
+- contact, communicate with server
+
+- may be intermittently connected
+
+- may have dynamic IP addresses
+
+- do *not* communicate directly with each other
+
+- examples: HTTP, IMAP, FTP
+
+##### Peer-peer architecture
+
+- *no* always-on server
+
+- arbitrary end systems directly communicate
+
+- peers request service from other peers, provide service in return to other peers
+  - *self scalability* – new peers bring new service capacity, as well as new service demands
+
+- peers are intermittently connected and change IP addresses
+  - complex management
+
+- example: P2P file sharing [BitTorrent]
+
+#### Processes communicating
+
+*process:* program running within a host
+
+- within same host, two processes communicate using inter-process communication (defined by OS)
+
+- processes in different hosts communicate by exchanging messages
+- clients,servers
+  - *client process:* process that initiates communication
+  - *server process:* process that waits to be contacted
+- note: applications with P2P architectures have client processes & server processes
+
+#### Sockets
+
+- process sends/receives messages to/from its socket
+
+- socket analogous to door
+
+  - sending process shoves message out door
+
+  - sending process relies on transport infrastructure on other side of door to deliver message to socket at receiving process
+
+  - two sockets involved: one on each side
+
+#### Addressing processes（寻址）
+
+- to receive messages, process must have *identifier*
+
+- host device has unique 32-bit IP address
+
+*Q:* does IP address of host on which process runs suffice for identifying the process?
+
+*A:* no, *many* processes can be running on same host
+
+- *identifier* includes both IP address and port numbers associated with process on host.
+
+- example port numbers:
+
+  - HTTP server: 80
+
+  - mail server: 25
+
+- to send HTTP message to gaia.cs.umass.edu web server:
+
+  - IP address: 128.119.245.12
+
+  - port number: 80
+
+#### An application-layer protocol defines:
+
+- types of messages exchanged, 
+  - e.g., request, response 
+
+- message syntax:
+  - what fields in messages & how fields are delineated
+
+- message semantics 
+  - meaning of information in fields
+
+- rules for when and how processes send & respond to messages
+
+- open protocols:
+
+  - defined in RFCs, everyone has access to protocol definition
+
+  - allows for interoperability
+
+  - e.g., HTTP, SMTP
+
+- proprietary protocols:
+
+  - e.g., Skype, Zoom
+
+#### Internet transport protocols services
+
+data integrity | throughput | timing |security
+
+##### TCP service:
+
+- *reliable transport* between sending and receiving process
+
+- *flow control:* sender won’t overwhelm receiver 
+
+- *congestion control:* throttle sender when network overloaded
+
+- *connection-oriented:* setup required between client and server processes
+
+- *does not provide:* timing, minimum throughput guarantee, security
+
+##### UDP service:
+
+- *unreliable data transfer* between sending and receiving process
+
+- *does not provide:* reliability, flow control, congestion control, timing, throughput guarantee, security, or connection setup.
+
+#### Securing TCP
+
+##### Vanilla TCP & UDP sockets:
+
+- no encryption（加密）
+
+- cleartext passwords sent into socket traverse Internet in cleartext (!)
+
+##### Transport Layer Security (TLS)
+
+- provides encrypted TCP connections
+
+- data integrity
+
+- end-point authentication
+
+
+
+
+
+------------------
 
 [Jim Kurose Homepage (umass.edu)](https://gaia.cs.umass.edu/kurose_ross/index.php)
 
