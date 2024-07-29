@@ -414,7 +414,7 @@ data integrity | throughput | timing |security
 
 - *flow control:* sender won’t overwhelm receiver 
 
-- *congestion control:* throttle sender when network overloaded
+- *congestion(拥堵) control:* throttle sender when network overloaded
 
 - *connection-oriented:* setup required between client and server processes
 
@@ -441,6 +441,447 @@ data integrity | throughput | timing |security
 - data integrity
 
 - end-point authentication
+
+### 2.2_Web, HTTP
+
+- Web, HTTP overview
+- HTTP connections
+  - TCP, "stateless"
+  - persisitent, non-persistent
+- HTTP messages
+  - requests, responses
+- HTTP cookies
+- Web caches
+- Conditional HTTP GET
+- HTTP/2, HTTP/3
+
+#### HTTP(hypertext transfer protocol) overview
+
+##### Web's application layer protocol
+
+- client/server model:
+  - client: brower that requests, receives, (using HTTP protocol) and “displays” Web objects 
+  - *server:* Web server sends (using HTTP protocol) objects in response to requests
+
+
+##### *HTTP uses TCP:*
+
+1. client initiates TCP connection (creates socket) to server, port 80
+2. server accepts TCP connection from client
+3. HTTP messages (application-layer protocol messages) exchanged between browser (HTTP client) and Web server (HTTP server)
+4. TCP connection closed
+
+##### *HTTP is “stateless”*
+
+- server maintains *no* information about past client requests
+- no notion of multi-step exchanges of HTTP messages to complete a Web “transaction”
+  - no need for client/server to track “state” of multi-step exchange
+  - all HTTP requests are independent of each other
+  - no need for client/server to “recover” from a partially-completed-but-never-completely-completed transaction
+
+- aside: protocols that maintain “state” are complex!
+  - past history (state) must be maintained
+  - if server/client crashes, their views of “state” may be inconsistent, must be reconciled
+
+
+在電腦的系統裡，所謂**狀態(State)**指得是某個東西在某個時間點下的狀況，而有狀態(Stateful)的意思則是，**輸出的值會依賴不同時間點下的狀態而改變**。
+
+不同於有狀態，無狀態(Stateless)可以說是現代網際網路的基礎，幾乎在每個面向都應用了無狀態的服務。例如你在讀網路新聞時使用了`HTTP`，在滑`Facebook`時使用了`Facebook REST API`來調出版面上的貼文。
+
+每個伺服器的回覆都不依賴任何存於伺服器的狀態，而是以快取的形式存在客戶端。我們不需要等待伺服器來確認我們的操作是否被正確地處理了。
+
+#### HTTP connections: two types
+
+##### *Non-persistent HTTP(HTTP1.0)*
+
+1. TCP connection opened
+2. at most one object sent over TCP connection
+3. TCP connection closed
+
+downloading multiple objects required multiple connections
+
+![non-persistent http response time](./assets/non-persistent http response time.png)
+
+- requires 2 RTTs per object
+
+- OS overhead for *each* TCP connection
+
+- browsers often open multiple parallel TCP connections to fetch referenced objects in parallel
+
+##### *Persistent HTTP(HTTP1.1)*
+
+- TCP connection opened to a server
+- multiple objects can be sent over *single* TCP connection between client, and that server
+- TCP connection closed
+
+- server leaves connection open after sending response
+- subsequent HTTP messages between same client/server sent over open connection
+- client sends requests as soon as it encounters a referenced object
+- as little as one RTT for all the referenced objects (cutting response time in half)
+
+![HTTP request message-general format](./assets/HTTP request message-general format.png)
+
+cr: carriage return character 回车
+
+lf: line-feed character  换行
+
+![Trying out HTTP (client side) for yourself](./assets/Trying out HTTP (client side) for yourself.png)
+
+#### Maintaining user/server state: cookies
+
+HTTP can be made stateful using cookies and sessions, which are two techniques that allow storing and transferring some information about the communication between clients and servers.
+
+*four components:*
+
+1) cookie header line of HTTP *response* message
+2) cookie header line in next HTTP *request* message
+3) cookie file kept on user’s host, managed by user’s browser
+4) back-end database at Web site
+
+#### Web caches (aka proxy servers)
+
+*Goal:* satisfy client requests without involving origin server
+
+- user configures browser to point to a (local) *Web cache*
+
+- browser sends all HTTP requests to cache
+
+  - *if* object in cache: cache returns object to client
+
+  - *else* cache requests object from origin server, caches received object, then returns object to client
+
+- Web cache acts as both client and server
+
+  - server for original requesting client
+  - client to origin server
+
+- server tells cache about object’s allowable caching in response header:
+
+  ```http
+  Cache-Control: max-age=<seconds>
+  Cache-Control: no-cache
+  ```
+
+##### *Why* Web caching?
+
+- reduce response time for client request 
+  - cache is closer to client
+
+- reduce traffic on an institution’s access link
+
+- Internet is dense with caches 
+  - enables “poor” content providers to more effectively deliver content
+
+#### Browser caching: Conditional GET
+
+*Goal:* don’t send object if browser has up-to-date cached version
+
+- no object transmission delay (or use of network resources)
+
+- *client:* specify date of browser-cached copy in HTTP request
+
+  ```http
+  <!--request--!>
+  If-modified-since: <date>
+  ```
+
+- *server:* response contains no object if browser-cached copy is up-to-date: 
+
+  ```http
+  <!--response--!>
+  HTTP/1.0 304 Not Modified
+  <!--object not modified before<date>-->
+  HTTP/1.0 200 OK
+  <data>
+  <!--object modified after <date>-->
+  ```
+
+#### HTTP1.1
+
+introduced multiple, pipelined GETs over single TCP connection
+
+- server responds *in-order* (FCFS: first-come-first-served scheduling) to GET requests
+
+- with FCFS, small object may have to wait for transmission (head-of-line (HOL) blocking) behind large object(s)
+
+- loss recovery (retransmitting lost TCP segments) stalls object transmission
+
+#### HTTP/2
+
+*Key goal:* decreased delay in multi-object HTTP requests
+
+increased flexibility at *server* in sending objects to client:
+
+- methods, status codes, most header fields unchanged from HTTP 1.1
+
+- transmission order of requested objects based on client-specified object priority (not necessarily FCFS)
+
+- *push* unrequested objects to client
+
+- divide objects into frames, schedule frames to **mitigate HOL blocking**
+
+四个objects，A最大，BCD都很小，按ABCD的顺序到了，将他们等大小分成A-1|A-2|A-3|A-4|A-5|B-1|B-2|C-1|C-2|D-1，由A-1|B-1|C-1|D-1|A-2......的顺序进行deliver,此时只有A会有delay.
+
+##### HTTP/2 to HTTP/3
+
+HTTP/2 over single TCP connection means:
+
+- recovery from packet loss still stalls all object transmissions
+  - as in HTTP 1.1, browsers have incentive to open multiple parallel TCP connections to reduce stalling, increase overall throughput
+
+- no security over vanilla TCP connection
+
+- HTTP/3: adds security, per object error- and congestion-control (more pipelining) over UDP
+  - more on HTTP/3 in transport layer
+
+### 2.3_E-mail, SMTP, IMAP
+
+- infrastructure: user agents, servers, mailboxes
+- SMTP: simple mail transfer protocol
+
+#### E-mail
+
+Three major components: 
+
+- user agents 
+
+- mail servers 
+
+- simple mail transfer protocol: SMTP
+
+User Agent
+
+- a.k.a. “mail reader”
+
+- composing, editing, reading mail messages
+
+- e.g., Outlook, iPhone mail client
+
+- outgoing, incoming messages stored on server
+
+##### mail servers
+
+- *mailbox* contains incoming messages for user
+
+- *message queue* of outgoing (to be sent) mail messages
+
+- SMTP protocol between mail servers to send email messages
+
+  - client: sending mail server
+
+  - “server”: receiving mail server
+
+#### SMTP RFC 5321
+
+- uses TCP to reliably transfer email message from client (mail server initiating connection) to server, port 25
+  - direct transfer: sending server (acting like client) to receiving server
+
+- three phases of transfer
+
+  - SMTP handshaking (greeting)
+
+  - SMTP transfer of messages
+
+  - SMTP closure
+
+- command/response interaction (like HTTP)
+
+  - commands: ASCII text
+
+  - response: status code and phrase
+
+SMTP: observations
+
+*comparison with HTTP:*
+
+- HTTP: client pull
+
+- SMTP: client push
+
+- both have ASCII command/response interaction, status codes
+
+- HTTP: each object encapsulated in its own response message
+
+- SMTP: multiple objects sent in multipart message
+- SMTP uses persistent connections
+- SMTP requires message (header & body) to be in 7-bit ASCII
+- SMTP server uses CRLF.CRLF to determine end of message
+
+#### Retrieving email: mail access protocols
+
+- SMTP: delivery/storage of e-mail messages to receiver’s server
+
+- mail access protocol: retrieval from server
+  - IMAP: Internet Mail Access Protocol [RFC 3501]: messages stored on server, IMAP provides retrieval, deletion, folders of stored messages on server
+
+- HTTP: gmail, Hotmail, Yahoo!Mail, etc. provides web-based interface on top of STMP (to send), IMAP (or POP) to retrieve e-mail messages
+
+### 2.4_The Domain Name System DNS
+
+core Internet function, implemented as application-layer protocol
+
+- DNS structure, function
+- resolving DNS queries
+- DNS record format
+- DNS protocol messages
+
+#### DNS: services, structure
+
+- hostname-to-IP-address translation
+
+- host aliasing
+  - canonical, alias names
+
+- mail server aliasing
+
+- load distribution
+  - replicated Web servers: many IP addresses correspond to one name
+
+Q: Why not centralize DNS?
+
+#### DNS: a distributed, hierarchical database
+
+##### root name servers
+
+- official, contact-of-last-resort by name servers that can not resolve name
+
+- *incredibly important* Internet function
+  - Internet couldn’t function without it!
+  - DNSSEC – provides security (authentication, message integrity)
+
+- ICANN (Internet Corporation for Assigned Names and Numbers) manages root DNS domain
+
+##### Top-Level Domain (TLD) servers
+
+- responsible for .com, .org, .net, .edu, .aero, .jobs, .museums, and all top-level country domains, e.g.: .cn, .uk, .fr, .ca, .jp
+
+- Network Solutions: authoritative registry for .com, .net TLD
+
+- Educause: .edu TLD
+
+##### authoritative DNS servers
+
+- organization’s own DNS server(s), providing authoritative hostname to IP mappings for organization’s named hosts 
+
+- can be maintained by organization or service provider
+
+##### Local DNS name servers
+
+- when host makes DNS query, it is sent to its *local* DNS server
+
+  - Local DNS server returns reply, answering:
+
+    - from its local cache of recent name-to-address translation pairs (possibly out of date!)
+
+    - forwarding request into DNS hierarchy for resolution
+
+- each ISP has local DNS name server; to find yours: 
+
+  - MacOS: % scutil --dns
+
+  - Windows: >ipconfig /all
+
+- local DNS server doesn’t strictly belong to hierarchy
+
+#### DNS name resolution
+
+##### iterated query
+
+- contacted server replies with name of server to contact
+
+- “I don’t know this name, but ask this server
+
+##### Recursive query
+
+- puts burden of name resolution on contacted name server
+
+- heavy load at upper levels of hierarchy?
+
+#### Caching DNS Information
+
+- once (any) name server learns mapping, it *caches* mapping, and i*mmediately* returns a cached mapping in response to a query
+
+  - caching improves response time
+
+  - cache entries timeout (disappear) after some time (TTL)
+
+  - TLD servers typically cached in local name servers
+
+- cached entries may be *out-of-date*
+
+  - if named host changes IP address, may not be known Internet-wide until all TTLs expire!
+
+  - *best-effort name-to-address translation!*
+
+![DNS records](./assets/DNS records.png)
+
+#### DNS security
+
+DDoS attacks
+
+- bombard root servers with traffic
+
+  - not successful to date
+
+  - traffic filtering
+
+  - local DNS servers cache IPs of TLD servers, allowing root server bypass
+
+- bombard TLD servers
+  - potentially more dangerous
+
+### 2.5_Peer-to-peer (P2P) architecture
+
+- *no* always-on server
+
+- arbitrary end systems directly communicate
+
+- peers request service from other peers, provide service in return to other peers
+  - *self scalability* – new peers bring new service capacity, and new service demands
+
+- peers are intermittently connected and change IP addresses
+  - complex management
+
+- examples: P2P file sharing (BitTorrent), streaming (KanKan), VoIP (Skype)
+
+#### BitTorrent
+
+- peer joining torrent: 
+
+  - has no chunks, but will accumulate them over time from other peers
+
+  - registers with tracker to get list of peers, connects to subset of peers (“neighbors
+
+- while downloading, peer uploads chunks to other peers
+
+- peer may change peers with whom it exchanges chunks
+
+- *churn:* peers may come and go
+
+- once peer has entire file, it may (selfishly) leave or (altruistically) remain in torrent
+
+### 2.6_video streaming and content distribution networks
+
+- video characteristics
+- streaming stored video
+  - buffering
+  - playout
+- DASH: dynamic client-driven streaming
+- CDNs,example
+
+
+
+### 2.7_Socket Programming
+
+- socket abstraction
+- UDP socket
+- TCP sockets
+
+
+
+
+
+
 
 
 
