@@ -707,6 +707,7 @@ SMTP: observations
 - SMTP uses persistent connections
 - SMTP requires message (header & body) to be in 7-bit ASCII
 - SMTP server uses CRLF.CRLF to determine end of message
+- HTTP Uses a blank line (CRLF) to indicate end of request header.
 
 #### Retrieving email: mail access protocols
 
@@ -929,8 +930,6 @@ store/serve multiple copies of videos at multiple geographically distributed sit
 
   - from which CDN node to retrieve content? At which rate?
 
-
-
 ### 2.7_Socket Programming
 
 - socket abstraction
@@ -953,11 +952,1270 @@ store/serve multiple copies of videos at multiple geographically distributed sit
 
 ![Socket programming with TCP](./assets/Socket programming with TCP.png)
 
+### Knowledgeable checks
+
+What is the purpose of the **conditional** HTTP GET request message?
+
+-To allow a server to only send the requested object to the client if this object has changes since the server last sent this object to the client.(cache)
+
+what will appear in a server’s application-level HTTP reply message?
+
+-a response code & a response phrase associated with a response code
+
+In which of the following forms of caching does a user benefit from its not only from its own recent requests (and cached replies) *but also from recent requests made from other users*?
+
+-HTTP local web caching
+
+-local DNS server caching
+
+UDP-data from different clients can be received on the same socket
+
+## Chapter 3-Transport Layer
+
+- understand principles behind transport layer services:
+  - multiplexing,demultiplexing
+  - reliable data transfer
+  - flow control
+  - congestion control
+- learn about Internet transport layer protocols:
+  - UDP:connectionless,best-effort service
+  - TCP:reliable,flow-and-congestion-contrilled connection-oriented transport
+
+### 3.1_Introduction and Transport-layer Services
+
+#### Transport services and protocols
+
+1. provide *logical communication* between application processes running on different hosts
+
+2. transport protocols actions in end systems:
+
+   - sender: breaks application messages into *segments*, passes to network layer分割、传递segment给IP
+
+   - receiver: reassembles segments into messages, passes to application layer重组、传递
+
+3. two transport protocols available to Internet applications
+
+   - TCP
+
+     reliable/in-order delivery/congestion control /flow control/connection setup
+
+   - UDP
+
+     unreliable/unordered delivery/no-frills extension of “best-effort” IP
+
+   - services *not* available: 
+
+     - delay guarantees
+     - bandwidth guarantees
+
+- network layer-commuincation between host寻址
+- transport layer-communication between processes给不同主机上的应用程序提供给逻辑通信（传递信息）
+  - relies on,enhances,network layer services
+
+### 3.2_multiplexing(sending) and demultiplexing(receiver)
+
+1. demultiplexing
+
+   1. host收到IP datagrams[包含源IP和目标IP、one transport-layer segment(包含源端口和目标端口号)]
+   2. host用IP+port送segment去socket
+
+2. connectionless demultiplexing
+
+   - IP/UDP datagrams with *same dest. port #,* but **different** source IP addresses and/or source port numbers will be directed to ***same** socket* at receiving host
+
+3. Connection-oriented demultiplexing
+
+   1. TCP socket identified by 4-tuple:
+
+      (source IP address,source port number,dest IP address,dest port number)
+
+   2. demux: receiver uses *all four values* *(4-tuple)* to direct segment to appropriate socket
+
+   3. server may support many simultaneous TCP sockets:
+
+      - each socket identified by its own 4-tuple
+
+      - each socket associated with **a different connecting client**
+
+4. Multiplexing/demultiplexing happen at *all* layers
+
+### 3.3_UDP:User Datagram Protocol
+
+- “no frills,” “bare bones” Internet transport protocol
+
+- “best effort” (“send and hope for the best”)service, UDP segments may be:
+
+  - lost
+  - delivered out-of-order to app
+
+- *connectionless:*
+
+  - no setup/handshaking between UDP sender, receiver-->no RTT incurred
+
+  - each UDP segment handled independently of others
+
+Q:Why is there a UDP?
+
+A:
+
+1. no connection establishment (which can add RTT delay)
+
+2. simple: no connection state at sender, receiver
+
+3. small header size
+
+4. no congestion control
+   1. UDP can blast away as fast as desired!
+   2. can function in the face of congestion在拥堵情况下仍能正常运行
+
+![UDP segment header](./assets/UDP segment header.png)
+
+### 3.4_Principles of reliable data transfer
+
+1. 网络的每个层次为上层提供特定的服务，并使用来自下层的特定功能。
+
+2. application layer和transport layer之间通过socket传输，transport layer看似是一条可靠的信道，但实际上会有lose, corrupt, reorder data等问题，rdt应运而生。
+
+3. ![Reliable data transfer protocol (rdt)-interfaces](./assets/Reliable data transfer protocol (rdt)-interfaces.png)
+
+**Reliable data transfer**
+
+- use finite state machines (FSM) to specify sender, receiver
+- state: when in this “state” next state uniquely determined by next event
+
+#### rdt1.0_基本的完美的情况
+
+- 基础信道，完美可靠
+  - 没有比特错误
+  - 没有包丢失
+- 为接收者和发送者分离有限状态机
+  - 发送者向基础信道发送数据
+  - 接收者从基础信道接收数据
+
+![rdt10](./assets/rdt10.png)
+
+#### rdt2.0_解决pkt错误
+
+- 基础信道可能会反转数据包中的比特
+  - 用checksum来发现比特错误
+- 如何恢复错误？
+  - acknowledgements(ACKs):接收者明确地告诉发送者包Ok收到
+  - negative acknowledgements(NAKs):pkt有错误
+    - 收到NAK后，sender重传pkt
+  - stop&wait:sender传一个包之后等待receiver的回应
+
+![rdt20](./assets/rdt20.png)
+
+那么如果ACK或者NAK错了怎么办呢？
+
+#### rdt2.1_解决ACK/NAK错误
+
+解决重复：
+
+- ACK/NAK出错时，发送者将当前包重新传送
+- 发送者给每个包加上一个sequence number
+- 接收者丢掉重复的包
+- 情景A：s发送了0包，r返回了ACK，并处于等待1包的状态，ACK发生反转，s重复发送0包，r拒绝。
+- 情景B：s发送了0包，r返回了NAK，并继续等待0包，NAK发送反转，s发送1包，r拒绝。
+
+![rdt21sender](./assets/rdt21sender.png)
+
+![rdt21receiver](./assets/rdt21receiver.png)
+
+#### rdt2.2_摒弃NAK
+
+- same functionality as rdt2.1, using ACKs only
+
+- instead of NAK, receiver sends ACK for last pkt received OK
+  - receiver must *explicitly* include seq # of pkt being ACKed 
+
+- duplicate ACK at sender results in same action as NAK: *retransmit current pkt*
+- 情景：s发送0包成功，r返回(ACK,1)，s继续发送1包，发送0包错误，r返回(ACK,0)，s继续发送0包。
+
+![rdt22](./assets/rdt22.png)
+
+#### rdt3.0_丢包
+
+underlying channel can also *lose* packets (data, ACKs)
+
+*Approach:* sender waits “reasonable” amount of time for ACK
+
+- retransmits if no ACK received in this time
+
+- if pkt (or ACK) just delayed (not lost):
+
+  - retransmission will be duplicate, but seq #s already handles this!
+
+  - receiver must specify seq # of packet being ACKed
+
+- use countdown timer to interrupt after “reasonable” amount of time
+
+![rdt30](./assets/rdt30.png)
+
+##### action
+
+```mermaid
+zenuml
+	title rdt3.0
+	sender->receiverA:pkt 0
+	receiverA->sender:ack 0
+	if(no_loss){
+		sender->receiverA:pkt 1
+		receiverA->sender:ack 1
+	}else if(packet_loss){
+		// pkt 1 loss
+		sender->sender:pkt 1
+		//timeout resend pkt 1
+		sender->receiverB:pkt 1
+		receiverB->sender:ack 1
+	}else if(ACK_loss){
+		sender->receiverC:pkt 1
+		// ack 1 loss
+		receiverC -> receiverC:ack 1
+		//timeout resend pkt 1
+		sender->receiverC:pkt 1
+		receiverC->sender:ack 1
+	}else if(premature_timeout/delayed_ACK){
+		sender->receiverD:pkt 1
+		// ack1a delayed
+		receiverD -> receiverD:ack 1a
+        //timeout resend pkt 1
+        //receiver detect duplicate
+        sender->receiverD:pkt 1
+        // delayed-ack1a arrived
+        receiverD->sender:ack 1a
+        sender->receiverD:pkt 0
+        // sender ignored ack1b
+        receiverD->sender:ack 1b
+	}
+	
+	sender->receiverA:pkt 0
+	receiverA->sender:ack 0
+```
+
+##### Performance of rdt3.0 
+
+(stop-and-wait)机制下$U_{sender}=\frac{L/R}{RTT+L/R}$协议限制了底层基础设施（通道）的性能
+
+(pipelined)sender allows multiple, “in-flight”, yet-to-be-acknowledged packets
+
+- range of sequence numbers must be increased
+
+- buffering at sender and/or receiver
+- $U_{sender}=\frac{3L/R}{RTT+L/R}$
+
+##### Go-Back-N
+
+##### sender
+
+- sender: “window” of up to N, consecutive transmitted but unACKed pkts
+
+  - k-bit seq # in pkt header
+
+- *cumulative ACK:* ACK(*n*): ACKs all packets up to, including seq # *n*
+
+  - on receiving ACK(*n*): move window forward to begin at *n+1*
+- timer for oldest in-flight packet
+- *timeout(n):* retransmit packet n and all higher seq # packets in window
+
+##### receiver
+
+- ACK-only: always send ACK for correctly-received packet so far, with highest *in-order* seq #
+
+  - may generate duplicate ACKs
+
+  - need only remember *rcv_base*
+
+- on receipt of out-of-order packet: 
+
+  - can discard (don’t buffer) or buffer: an implementation decision
+
+  - re-ACK pkt with highest in-order seq #
+
+#### Selective repeat
+
+- *pipelining*:  *multiple* packets in flight
+
+- *receiver individually ACKs* all correctly received packets
+  - buffers packets, as needed, for in-order delivery to upper layer
+
+- sender:
+
+  - maintains (conceptually) a timer for each unACKed pkt
+    - timeout: retransmits single unACKed packet associated with timeout
+
+  - maintains (conceptually) “window” over  *N* consecutive seq #s
+    - limits pipelined, “in flight” packets to be within this window
+
+![Selective repeat sender and receiver](./assets/Selective repeat sender and receiver.png)
+
+```mermaid
+zenuml
+	title Go-Back-N in action | Selective Repeat in action(sender window=4)
+	sgbn as SenderGBN
+	rgbn as ReceiverGBN
+	ssr as SenderSR
+	rsr as ReceiverSR
+	sgbn -> rgbn:send pkt0
+	rgbn -> sgbn:rcv pk0,send ack0
+	sgbn -> rgbn:send pkt1
+	rgbn -> sgbn:rcv pk1,send ack1
+	// pkt2 loss
+	sgbn -> sgbn:send pkt2
+	sgbn -> rgbn:send pkt3
+	if(GBN){
+		//wait
+        rgbn -> sgbn:rcv pk3,discard,(re)send ack1
+        sgbn -> rgbn:rcv ack0,send pkt4
+        rgbn -> sgbn:rcv pk4,discard,(re)send ack1
+        sgbn -> rgbn:rcv ack1,send pkt5
+        rgbn -> sgbn:rcv pk5,discard,(re)send ack1
+        //rcv ack3,ignore duplicate ACK
+        sgbn -> rgbn:send pkt2
+        sgbn -> rgbn:send pkt3
+        sgbn -> rgbn:send pkt4
+        sgbn -> rgbn:send pkt5
+        rgbn -> sgbn:rcv pkt2,deliver,send ack2
+        rgbn -> sgbn:rcv pkt3,deliver,send ack3
+        rgbn -> sgbn:rcv pkt4,deliver,send ack4
+        rgbn -> sgbn:rcv pkt5,deliver,send ack5
+	}else if(SR){
+		// wait
+        rsr -> ssr:rcv pkt3,buffer,send ack3
+        ssr -> rsr:rcv ack0,send pkt4
+        ssr -> rsr:rcv ack1,send pkt5
+        rsr -> ssr:rcv pkt4,buffer,send ack4
+        rsr -> ssr:rcv pkt5,buffer,send ack5
+        //record ack3 arrived,pkt 2 timeout
+        ssr -> rsr:send pkt2(but not 3,4,5)
+        rsr -> ssr:rcv pkt2;deliver pkt2,3,4,5;send ack2
+      }	
+```
+
+Q:序列号空间大小k和窗口尺寸N需满足的关系？
+
+A:$N_{sender}+N_{receiver}<=2^k$
+
+### 3.5_Connection-oriented transport:TCP
+
+|      | overview                     |                                                              |
+| ---- | ---------------------------- | ------------------------------------------------------------ |
+| 1    | point-to-point               | one sender,one receiver                                      |
+| 2    | reliable,in-order byte steam | no "message boundaries"                                      |
+| 3    | full duplex data             | 1.bi-directional data flow in same connection 2.MSS:maximum segment size |
+| 4    | cumulative ACKs              |                                                              |
+| 5    | pipelineing                  | TCP congestion and flow control set window size              |
+| 6    | connection-oriented          | handshaking(exchange of control messages) initializes sender,receiver state before data exchange |
+| 7    | flow controlled              | sender will not overwhelm receiver                           |
+
+![TCP segments structure](./assets/TCP segments structure.png) sequence numbers(seq #):segement中第一个比特的比特流序号。
+
+acknowledgements:期待从另一端传来的下一个比特的seq #.
+
+#### TCP rdt
+
+**timeout value:**
+
+$EstimatedRTT=(1-\alpha)\times EstimatedRTT+\alpha\times SampleRTT$
+
+- SampleRTT: measured time from segment transmission until ACK receipt,ignore retransmissions.average several *recent* measurements, not just current SampleRTT.
+- typical value:$\alpha = 0.125$
+
+$TimeoutInterval=EstimateRTT+4\times DevRTT$
+
+- $DevRTT$:safety margin
+- $DevRTT$:exponential weighted moving average (EWMA) of $SampleRTT$,和$EstimatedRTT$的偏差。
+- $DevRTT=(1-\beta)\times DevRTT+\beta\times |SampleRTT-EstimateRTT|$
+- typical value:$\beta = 0.25$
+
+##### TCP Sender
+
+event:data received from application
+
+1. 创建一个带有seq #的segment
+2. seq #是segment中第一个数据字节的字节流编号
+3. 没有完全running的话给最久远并没被ACK的segment计时$TimeoutInterval$
+
+event: timeout
+
+1. 重传segment
+2. 重新计时
+
+event: ACK received
+
+1. 如果收到了以前还没有ACK的segment的ACK，就更新ACKed；如果还有没ACKed的就开始计时
+
+##### TCP Receiver
+
+| Event at receiver                                            | TCP receiver action                                          |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| arrival of in-order segment with expected seq #.All data up to expected seq # already ACKed. | delayed ACK.Wait up to 500ms for next segment.If no next segment,send ACK. |
+| arrival of in-order segment with expected seq #.One other segment has ACK pending. | immdiately send single cumulative ACK,ACKing both in-order   |
+| arrival of out-of-order segment higher-than-expect seq #.Gap detected. | immdiately send duplicated ACK,indicating seq # of next expected byte. |
+| arrival of segment that partially or completely fills gap.   | immdiately send ACK,provided that segment starts at lower end of gap. |
+
+![TCP retransmission scenarios](./assets/TCP retransmission scenarios.png)
+
+##### TCP fast retransmit
+
+if sender receives 3 additional ACKs for same data (“triple duplicate ACKs”), resend unACKed segment with smallest seq #
+
+- likely that unACKed segment lost, so don’t wait for timeout
+- Receipt of three duplicate ACKs indicates 3 segments received after a missing segment – lost segment is likely. So retransmit!
+
+#### TCP flow control
+
+one sender too fast for one receiver
+
+*Q:* What happens if network layer delivers data faster than application layer removes data from socket buffers?
+
+A:receiver controls sender, so sender won’t overflow receiver’s buffer by transmitting too much, too fast.
+
+- TCP receiver 在TCP header`rwnd`字段公告了free buffer space
+  - `RcvBurrer`的大小通过socket options设置（一般是4096bytes）
+  - 很多操作系统可以自动调节这个参数
+- sender限制unACKed("in-flight")的数量来接收`rwnd`
+- 保证接收缓冲区不会溢出
+
+#### TCP connection management
+
+在交换数据之前，sender/receiver握手
+
+- 同意建立连接
+  - `req_conn(x)`
+  - `acc_conn(x)`
+  - 障碍：variable delays、retransmitted messages (e.g. req_conn(x)) due to message loss、message reordering、can’t “see” other side
+- 对连接参数达成共识(e.g., starting seq #s)
+- `Socket clientSocket = newSocket("hostname","port number")`
+- `Socket connectionSocket = welcomeSocket.accept()`
+
+```mermaid
+ zenuml
+	title TCP 3-way handshake
+	c as client
+	s as server
+	//clientSocket=socket(AF_INET,SOCK_STREAM)
+	//*client LISTEN
+	//clientSocket.connect((serverName,serverPort))
+	//*SYNSENT
+	//choose init seq #, send TCP SYN msg
+	c->s:SYNbit=1,Seq=x
+	//serverSocket=socket(AF_INET,SOCK_STREAM)
+	//serverSocket.bind(('',serverPort))
+	//serverSocket.listen(1)
+	//connectionSocket, addr=serverSocket.accept()
+	//*server LISTEN
+	//*SYN RVCD
+	s->c:SYNbit=1,Seq=y,ACKbit=1;ACKnum=x+1
+	//*client ESTAB
+	//received SYNACK(x)indicates server is live;
+	//send ACK for SYNACK;this segment may contain client-to-server data
+	c->s:ACKbit=1,ACKnum=y+1
+	//*client ESTAB
+	//client received ACK(y) indicates client is live
+	//closing a TCP connection
+	//simultaneous
+	c->s:FINbit=1
+	s->c:FIN,ACK
+	
+```
+
+#### Principles of congestion control
+
+too many senders, sending too fast.
+
+##### Causes/costs of congestion: 
+
+- throughput can never exceed capacity
+- delay increases as capacity approached
+- loss/retransmission decreases effective throughput
+- un-needed duplicates further decreases effective throughput
+- upstream transmission capacity / buffering wasted for packets lost downstream
+
+##### Approaches towards congestion control
+
+- End-end congestion control:
+  - no explicit feedback from network
+  - congestion *inferred* from observed loss, delay
+  - TCP
+- Network-assisted congestion control:
+  - routers provide *direct* feedback to sending/receiving hosts with flows passing through congested router
+  - may indicate congestion level or explicitly set sending rate
+  - TCP ECN, ATM, DECbit protocols
+
+#### TCP congestion control
+
+##### AIMD
+
+先增加传输速率直到丢包，在再丢掉的地方降低速率
+
+**A**dditive **I**ncrease——increase sending rate by 1 maximum segment size every RTT until loss detected
+
+**M**ultiplicative **D**ecrease——cut sending rate in half at each loss event
+
+- Cut in half on loss detected by triple duplicate ACK (TCP Reno)
+
+- Cut to 1 MSS (maximum segment size) when loss detected by timeout (TCP Tahoe)
+
+like sawtooth——*probing* for bandwidth
+
+**Why AIMD?**  
+
+AIMD – a distributed, asynchronous algorithm – has been shown to:
+
+- optimize congested flow rates network wide!
+- have desirable stability properties
+
+**details**
+
+- `cwnd`=sent,but not yet ACKed("in-flight")+available but not used
+  - `cwnd` is dynamically adjusted in response to observed network congestion (implementing TCP congestion control)
+
+- TCP sending behavior *roughly:* send cwnd bytes, wait RTT for ACKS, then send more bytes
+
+  - $TCPrate\approx\frac{cwnd}{RTT}bytes/sec$
+
+  - TCP sender limits transmission `LastByteSent-LaseByteAcked` $\leq$ `cwnd`
+
+- TCP slow start
+
+  - initial rate is slow, but ramps up exponentially fast
+
+    - initially `cwnd` = 1 MSS
+    - double `cwnd` every RTT
+
+    - done by incrementing `cwnd` for every ACK received
+
+  - when `cwnd` gets to 1/2 of its value before timeout,the exponential increase switch to linear.
+
+    - variable `ssthresh`
+
+    - §on loss event, `ssthresh` is set to 1/2 of `cwnd` just before loss event
+
+
+![TCP congestion control](./assets/TCP congestion control.png)
+
+##### CUBIC
+
+- after cutting rate/window in half on loss, initially ramp  to $W_{max}$  *faster*, but then approach $W_{max}$ more *slowly*.
+- congestion state of bottleneck link probably (?) hasn’t changed much
+- $K$:point in time when TCP window size will reach $W_{max}$,$K$ itself is tunable.
+- increase W as a function of the *cube* of the distance between current time and K
+
+  - larger increases when further away from $K$
+
+  - smaller increases (cautious) when nearer $K$
+
+
+##### bottleneck link
+
+increasing TCP sending rate will *not* increase end-end throughout with congested bottleneck and increasing TCP sending rate *will* increase measured RTT-----> **Goal:** *“keep the end-end pipe just full, but not fuller”*----->keep bottleneck link busy transmitting, but avoid high delays/buffering
+
+##### Delay-based TCP congestion control
+
+最大流量+低延迟+不丢包
+
+$measured throughput = \frac{bytes sent in last RTT interval}{RTT_{measured}}$
+
+Delay-based approach:
+
+- $measured throughput = \frac{bytes sent in last RTT interval}{RTT_{measured}}$
+
+- $RTT_{min}-MinimumObservedRTT(uncongested path)$
+
+- uncongestion throughput with congestion window `cwnd` is `cwnd`/$RTT_{min}$
+
+  - if measured throughput “very close” to uncongested throughput
+
+        increase cwnd linearly        /* since path not congested */ 
+
+  - else if measured throughput “far below” uncongested throughout
+
+       decrease cwnd linearly    /* since path is congested */
+
+##### Explicit congestion notification (ECN)
+
+TCP部署常常使用network-assisted拥塞控制：
+
+- 两个在IP header的bit(ToS field)通过网络路由标记来指明拥塞：
+  - 策略来确定网络运营商选择的标记(*policy* to determine marking chosen by network operator)
+- 拥塞标志被带至目的地
+- 目的地将ECE bit 放在ACK里来告知sender
+- involves both IP (IP header ECN bit marking) and TCP (TCP header C,E bit marking)
+
+##### TCP fairness
+
+**Goal**:if *K* TCP sessions share same bottleneck link of bandwidth *R*, each should have average rate of *R/K*
+
+under idealized assumptions:
+
+1. same RTT
+
+2. fixed number of sessions only in congestion avoidance 
+
+TCP IS FAIR
+
+Q:must all network apps be “fair”?
+
+| UDP                                                          | parallel TCP connections                                     |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| multimedia apps often do not use TCP——do not want rate throttled by congestion control | application can open *multiple* parallel connections between two hosts |
+| instead use UDP——send audio/video at constant rate, tolerate packet loss | web browsers do this                                         |
+| there is no “Internet police” policing use of congestion control | e.g., link of rate R with 9 existing connections:new app asks for 1 TCP, gets rate R/10\|asks for 11 TCPs, gets R/2 |
+
+### 3.8_Evolution of transport-layer functionality
+
+| Scenario                               | TCP Challenges                                               |
+| -------------------------------------- | ------------------------------------------------------------ |
+| Long, fat pipes (large data transfers) | Many packets “in flight”; loss shuts down pipeline           |
+| Wireless networks                      | Loss due to noisy wireless links,  mobility; TCP treat this as congestion loss |
+| Long-delay links                       | Extremely long RTTs                                          |
+| Data center networks                   | Latency sensitive                                            |
+| Background traffic flows               | Low priority, “background” TCP flows                         |
+
+---->moving transport–layer functions to application layer, on top of UDP
+
+#### HTTP/3: QUIC(Quick UDP Internet Connections)
+
+- multiple application-level “streams” multiplexed over single QUIC connection
+
+  - separate reliable data transfer, security
+
+  - common congestion control
+
+TCP |reliability, congestion control state|transport layer + TLS |authentication, crypto state|security——2 serial handshakes
+
+QUIC|reliability, congestion control, authentication, crypto state——1 handshake
+
+```mermaid
+classDiagram
+    application-a <|-- transport-a
+    application-a : TLS encryption
+    class transport-a{
+    	TCP RDT
+    	TCP Cong.Contr.
+    }
+    note for application-a "HTTP1-1"
+    application-b <|-- transport-b
+    application-b : QUIC encryption*3
+    application-b : QUIC RDT*3
+    application-b : QUIC Cong.Contr.
+    class transport-b{
+    	UDP
+    }
+    note for application-b "HTTP/2 with QUIC:no HOL blocking"
+```
+
+## Chapter 4-Network Layer:Data Plane
+
+### overview
+
+#### Network-layer services and protocols
+
+- transport segment
+
+  - sender:封装segments to datagrams，传输到link layer
+
+  - receiver:传送segment 到传输层
+
+- network layer protocols in *every Internet device*: hosts, routers
+- routers:
+  - examines header fields in all IP datagrams passing through it
+  - moves datagrams from input ports to output ports to transfer datagrams along end-end path
+
+#### Two key network-layer functions
+
+##### network-layer functions:
+
+- *forwarding:* move packets from a router’s input link to appropriate router output link将路由器里的包从input到output
+- *routing:* determine route taken by packets from source to destination一个路由器到另一个路由器
+  - *routing algorithms*
+
+#### Network layer: data plane, control plane
+
+#### data plane
+
+- *local*, per-router function
+
+- determines how datagram arriving on router input port is forwarded to router output port
+
+#### control plane
+
+- *network-wide* logic
+
+- determines how datagram is routed among routers along end-end path from source host to destination host
+
+- two control-plane approaches:
+
+  - *traditional routing algorithms:* implemented in routers
+    - 
+    - 每个路由器里都算出路由表
+    - 将路由器分在不同的 AS(Autonomous System) 里，每个 AS 去管理自己的路由器，那么路由器存的数据也就是 AS 里所有路由器的数据了
+
+  - *software-defined networking (SDN)*: implemented in (remote) servers
+    - Remote controller computes, installs forwarding tables in routers
+- Per-router control plane
+  - Individual routing algorithm components *in each and every router* interact in the control plane
+
+- Logically centralized control plane
+  - 一个独特的（通常的远程的）控制器与本地控制代理（control agent CAs）进行交互。
+
+
+##### Network-layer service model——transporting datagrams from sender to receiver
+
+**Internet “best effort” service model**
+
+*No* guarantees on:
+
+1. <u>successful datagram delivery</u> to destination(loss)
+
+2. <u>timing</u> or <u>order</u> of delivery
+
+3. <u>bandwidth</u> available to end-end flow
+
+advantsge:
+
+- <u>simplicity of mechanism</u> has allowed Internet to be widely deployed adopted机制简单
+
+- <u>sufficient provisioning of bandwidth</u> allows performance of real-time applications (e.g., interactive voice, video) to be “good enough” for “most of the time”带宽充足
+
+- replicated, application-layer distributed services (datacenters, content distribution networks) connecting close to clients’ networks, allow services to be provided from multiple locations分布式应用层
+
+- congestion control of “elastic” services helps弹性拥塞控制
+
+### What’s inside a router
+
+#### input port function
+
+1. line termination:a physical layer responsible for receiving bit level transmission. Copper, fiber wireless.(bit)
+2. link layer:bit assemble into Ethernet frame.discuss this in details in chapter 6.(frame)
+
+3. 分散式切换decentralized switching(datagram): 
+
+   - using header field values, lookup output port using forwarding table in input port memory *(“match plus action”)*
+
+   - goal: complete input port processing at ‘line speed’
+
+   - input port queuing: if datagrams arrive faster than forwarding rate into switch fabric如果datagrams到达的速率超过了forwarding进入switch fabric的速率，就会产生队列。
+   - 两种forwarding的方法
+     - **destination-based forwarding**: forward based only on destination IP address (traditional)只依靠重点的IP地址
+     - **generalized forwarding**: forward based on any set of header field values依靠任何hfv来实现
+       - **Longest prefix matching**最长前缀匹配原则
+         - 利用最长的相同前缀在forwarding table中匹配终点地址，也就是匹配最大的公网ID。如果两个子网有重合，/x匹配x大的那个
+         - often performed using ternary content addressable memories (TCAMs)三元内容可寻址存储器
+           - *content addressable:* present address to TCAM: retrieve address in one clock cycle, regardless of table size
+
+#### switching fabrics
+
+- transfer packet from input link to appropriate output link
+
+- switching rate: rate at which packets can be transfer from inputs to outputs
+  - often measured as multiple of input/output line rate
+  - N inputs: switching rate N times line rate desirable
+
+- major type
+
+  - memory通过CPU直接控制，包被复制到系统的Memory，速率受memory的bandwidth限制(2 bus crossings per datagram)。
+
+  - bus:datagram from input port memory to output port memory via a shared bus,*bus contention:* switching speed limited by bus bandwidth
+
+  - interconnection network
+
+    - Crossbar, Clos networks, other interconnection nets initially developed to connect processors in multiprocessor
+
+    - multistage switch: *nxn* switch from multiple stages of smaller switches
+
+    - exploiting parallelism: 
+
+      - fragment datagram into fixed length cells on entry将数据报文分割成固定长度的单元
+
+      - switch cells through the fabric, reassemble datagram at exit
+
+    - scaling, using multiple switching “planes” in parallel: 
+
+      - speedup, scaleup via parallelism
+
+
+##### Input port queuing
+
+- If switch fabric slower than input ports combined -> queueing may occur at input queues 
+  - queueing delay and loss due to input buffer overflow!
+- HOL blocking: queued datagram at front of queue prevents others in queue from moving forward
+- **队头阻塞**（**Head-of-line blocking**或缩写为**HOL blocking**）在[计算机网络](https://baike.baidu.com/item/计算机网络/0?fromModule=lemma_inlink)的范畴中是一种性能受限的现象。它的原因是一列的第一个数据包（队头）受阻而导致整列数据包受阻。
+
+##### Output port queuing(really important)
+
+- 当datagram从fabric来的速度大于link transmission rate时需要buffer。
+
+  --->datagrams can be lost due to congestion, lack of buffers
+
+- scheduling discipline 从排队的datagrams中选择谁被传输
+
+  --->优先安排——谁能取得更好的表现，network neutrality
+
+  - What is network neutrality?
+
+    1. *technical:* how an ISP should share/allocation its resources
+
+    - packet scheduling, buffer management are the *mechanisms*
+
+    2. *social, economic* principles
+
+    - protecting free speech
+
+    - encouraging innovation, competition
+
+    3. enforced *legal* rules and policies
+
+    4. 2015 US FCC *Order on Protecting and Promoting an Open Internet:* three “clear, bright line” rules:
+
+       **no blocking …** “shall not block lawful content, applications, services, or non-harmful devices, subject to reasonable network management.”
+
+       **no throttling …** “shall not impair or degrade lawful Internet traffic on the basis of Internet content, application, or service, or use of a non-harmful device, subject to reasonable network management.”
+
+       **no paid prioritization. …** “shall not engage in paid prioritization”
+
+- *queueing (delay) and loss due to output port buffer overflow!*
+
+- with $N$ flows,buffer equal to$\frac{RTT\times C}{\sqrt{N}}$
+
+- 太多buffer会造成delays（尤其是在家庭路由中）
+
+  - long RTTs:poor performance for real-time apps, sluggish TCP response
+  - recall delay-based congestion control: “keep bottleneck link just full enough (busy) but no fuller”
+
+##### buffer management
+
+drop:满了就丢
+
+1. tail drop: 丢掉来的
+2. priority:drop/remove on priority basis
+
+marking: which packets to mark to signal congestion (ECN, RED)
+
+##### Packet Scheduling
+
+deciding which packet to send next on link
+
+- first come, first served
+  - FCFS: packets transmitted in order of arrival to output port(also known as: First-in-first-out (FIFO) )
+- priority
+  - arriving traffic classified, queued by class
+    - any header fields can be used for classification
+  - send packet from highest priority queue that has buffered packets
+    - FCFS within priority class
+- round robin
+  - arriving traffic classified, queued by class
+    - any header fields can be used for classification
+    - server cyclically, repeatedly scans class queues, sending one complete packet from each class (if available) in turn
+- weighted fair queueing
+  - generalized Round Robin
+  - each class, $i$, has weight, $w_i$ and gets weighted amount of service in each cycle$\frac{W_i}{\sum_jW_j}$
+  - minimum bandwidth guarantee (per-traffic-class)
+
+### IP:the Internet Protocol
+
+#### host, router network layer functions
+
+***Path-selection algorithms**:* ---->forwarding table
+
+implemented in 
+
+- routing protocols (OSPF, BGP)
+
+- SDN controller
+
+***IP protocol***
+
+- datagram format
+
+- addressing
+
+- packet handling conventions
+
+***ICMP protocol***
+
+- error reporting
+
+- router “signaling”
+
+![IP Datagram format](./assets/IP Datagram format.png)
+
+#### IP addressing
+
+- IP address: 32-bit identifier associated with each host or router *interface* 
+
+- IP addresses have structure: 
+
+  - subnet part: devices in same subnet have common high order bits
+
+  - host part: remaining low order bits 
+
+- interface: connection between host/router and physical link
+
+  - outer’s typically have multiple interfaces
+
+  - host typically has one or two interfaces (e.g., wired Ethernet, wireless 802.11)
+
+- CIDR: Classless Inter Domain Routing (pronounced “cider”)
+
+  - subnet portion of address of arbitrary length任意长度的地址的子网部分
+
+  - address format: a.b.c.d/x, where x is # bits in subnet portion of address
+- Q1:How does a *host* get IP address within its network (host part of address)?
+
+  1. hard-coded by sysadmin in config file (e.g., /etc/rc.config in UNIX)
+  2. DHCP: Dynamic Host Configuration Protocol: dynamically get address from as server(“plug-and-play”)集中对用户IP地址进行动态管理和配置
+     - goal-host *dynamically* obtains IP address from network server when it “joins” network
+
+       - can renew its lease on address in use
+
+       - allows reuse of addresses (only hold address while connected/on)
+
+       - support for mobile users who join/leave network
+
+     - DHCP can return more than just allocated IP address on subnet:
+
+       - address of first-hop router for client
+
+       - name and IP address of DNS sever
+
+       - network mask (indicating network versus host portion of address)
+
+```mermaid
+ zenuml
+	title DHCP client-server scenario
+	s as server
+	c as client
+	//DHCP server will be co-located in router, serving all subnets to which router is
+    //attached arriving DHCP client needs address in this network
+	//__DHCP dicover(optional)__
+	c->s:Broadcast: is there a DHCP server out there?
+	//The two steps above can be skipped “if a client remembers and wishes to
+	//reuse a previously allocated network address” [RFC 2131]
+	//__DHCP offer(optional)__
+	s->c:Broadcast: I’m a DHCP server! Here’s an IP address you can use.
+	//__DHCP request__
+	c->s:Broadcast: OK.I would like to use this IP address!
+	//__DHCP ACK__
+	s->c:Broadcast: OK.You’ve got that IP address!
+```
+
+##### DHCP example
+
+1. 连接互联网需要用DHCP获取IP地址、第一跳的地址、DNS server的地址。
+2. DHCP REQUEST message封装在UDP、IP、以太网中。
+3. LAN局域网上的以太网frame帧广播，在运行的DHCP服务器上接收。
+4. Ethernet de-mux’ed to IP de-mux’ed, UDP de-mux’ed to DHCP.
+5. DCP server制定的DHCP ACK包括客户端的IP地址、第一跳路由的IP地址和DNS server的地址。
+6. 封装的 DHCP 服务器应答转发到客户端，在客户端解复用到 DHCP。
+7. client now knows its IP address, name and IP address of DNS server, IP address of its first-hop router。
+
+- Q2:How does a *network* get IP address for itself (network part of address)?
+- A:gets allocated portion of its provider ISP’s address space,ISP can then allocate out its address space in 8 blocks——
+
+##### Hierarchical addressing分层寻址
+
+more specific routes
+
+*Q:* how does an ISP get block of addresses?
+
+*A:* ICANN: Internet Corporation for Assigned Names and Numbers http://www.icann.org/
+
+- allocates IP addresses, through 5 regional registries (RRs) (who may then allocate to local registries)
+
+- manages DNS root zone, including delegation of individual TLD (.com, .edu , …) management
+
+*Q:* are there enough 32-bit IP addresses?
+
+- ICANN allocated last chunk of IPv4 addresses to RRs in 2011
+
+- NAT (next) helps IPv4 address space exhaustion
+
+- IPv6 has 128-bit address space
+
+#### Subnets
+
+将每个接口从他们的主机或路由器分离，从而创建隔离网络的“孤岛”，每个隔离的网络被称为子网device interfaces that can physically reach each other without passing through an intervening router
+
+#### ISP
+
+网络业务服务商 Internet service provider
+
+网络业务提供商，能提供拨号上网服务、网上浏览、下载文件、收发电子邮件等服务，是网络最终用户进入Internet的入口和桥梁。它包括Internet接入服务和Internet内容提供服务。这里主要是Internet接入服务，即通过电话线把你的计算机或其他终端设备连入Internet。
+
+#### NAT: network address translation
+
+所有内网的设备向互联网所表现出来的仅为一个IPv4地址：all devices in local network share just one IPv4 address as far as outside world is concerned;all devices in local network have 32-bit addresses in a “private” IP address space (10/8, 172.16/12, 192.168/16 prefixes) that can only be used in local network.
+
+advantages:
+
+1. just one IP address needed from provider ISP for *all* devices
+2. can change addresses of host in local network without notifying outside world
+3. can change ISP without changing addresses of devices in local network
+4. security: devices inside local net not directly addressable, visible by outside world
+
+**rest of Internet**:*all* datagrams *leaving* local network have *same* source NAT IP address: 138.76.29.7, but *different* source port numbers
+
+local network:datagrams with source or destination in this network have 10.0.0/24 address for source, destination (as usual)
+
+ **implementation: NAT router must (transparently):**转换过程
+
+- outgoing datagrams: replace (source IP address, port #) of every outgoing datagram to (NAT IP address, new port #)
+  - remote clients/servers will respond using (NAT IP address, new port #) as destination address
+
+- remember (in NAT translation table) every (source IP address, port #) to (NAT IP address, new port #) translation pair
+
+- incoming datagrams: replace (NAT IP address, new port #) in destination fields of every incoming datagram with corresponding (source IP address, port #) stored in NAT table
+
+**NAT has been controversial:**
+
+- routers “should” only process up to layer 3
+
+- address “shortage” should be solved by IPv6
+
+- violates end-to-end argument (port # manipulation by network-layer device)
+
+- NAT traversal: what if client wants to connect to server behind NAT?
+
+**but NAT is here to stay:**
+
+- extensively used in home and institutional nets, 4G/5G cellular nets
+
+#### IPv6
+
+##### motivation
+
+- initial motivation: 32-bit IPv4 address space would be completely allocated 
+
+- additional motivation:
+
+  - speed processing/forwarding: 40-byte fixed length header
+
+  - enable different network-layer treatment of “flows”
+
+![IPv6 datagram format](./assets/IPv6 datagram format-1728569693600-1.png)
+
+What’s missing (compared with IPv4): 
+
+1. no checksum (to speed processing at routers)
+
+2. no fragmentation/reassembly
+
+3. no options (available as upper-layer, next-header protocol at router)
+
+##### Transition from IPv4 to IPv6
+
+- not all routers can be upgraded simultaneously
+  - no “flag days”
+- how will network operate with mixed IPv4 and IPv6 routers? 
+  - tunneling: IPv6 datagram carried as *payload* in IPv4 datagram among IPv4 routers (“packet within a packet”)
+    - tunneling used extensively in other contexts (4G/5G)
+
+**tunneling**:隧道是一种使用网络不支持的协议在该网络中传输数据的方法，工作原理是对数据包进行封装，将数据包包装在其他数据包内。经常用于VPN，在网络之间建立高效和安全的连接，从而使用本不受支持的网络协议，并在某些情况下允许用户绕过防火墙。封装的数据包本质上是另一个数据包内的数据包，在封装的数据包中，第一个数据包的标头和有效负载进入周围数据包的有效负载部分，原始数据包本身成为有效负载。E.g.IPv6成为IPv4的payload
+
+### Generalized forwarding,SDN
+
+#### match plus action
+
+*Review:* each router contains a forwarding table(aka:flow table)
+
+- “match plus action” abstraction: match bits in arriving packet, take action
+
+  - *destination-based forwarding:* forward based on dest. IP address
+
+  - *generalized forwarding*: 
+
+    - many header fields can determine action
+
+    - many action possible: drop/copy/modify/log packet
+
+##### Flow table abstraction
+
+- Router’s flow table define router’s match+action rules
+
+- flow: defined by header field values (in link-, network-, transport-layer fields)
+
+- generalized forwarding: simple packet-handling rules
+
+  - match: pattern values in packet header fields
+
+  - actions: for matched packet: drop, forward, modify, matched packet or send matched packet to controller 
+
+  - priority: disambiguate overlapping patterns
+
+  - ounters: #bytes and #packets
+
+- action
+
+  1. Forward packet to port(s)
+
+  2. Drop packet
+
+  3. Modify fields in header(s)
+
+  4. Encapsulate and forward to controller
+
+- stats
+
+  - packet+byte counters
+
+#### OpenFlow abstraction
+
+- match+action: abstraction unifies different kinds of devices
+
+- Router
+
+  - *match:* longest destination IP prefix
+
+  - *action:* forward out a link
+
+- Switch
+
+  - *match:* destination MAC address
+
+  - *action:* forward or flood
+
+- Firewall
+
+  - *match*: IP addresses and TCP/UDP port numbers
+
+  - *action:* permit or deny
+
+- NAT
+
+  - *match:* IP address and port
+
+  - *action:* rewrite address and port
+
+*today:* more generalized programming: P4 (see p4.org).
+
+### Middleboxes中间件
+
+“any intermediary box performing functions apart from normal, standard functions of an IP router on the data path between a source host and destination host”
+
+NAT: home, cellular, institutional
+
+Application-specific: service providers, institutional, CDN
+
+Firewalls, IDS: corporate, institutional, service providers, ISPs
+
+Load balancers: corporate, service provider, data center, mobile nets
+
+Caches: service provider, mobile, CDNs
+
+#### 发展历程：
+
+1. initially: proprietary (closed) hardware solutions
+
+2. move towards “whitebox” hardware implementing open API
+
+   1. move away from proprietary hardware solutions
+
+   2. programmable local actions via match+action
+
+   3. move towards innovation/differentiation in software
+
+3. 软件定义网络SDN: (logically) centralized control and configuration management often in private/public cloud
+
+4. 网络功能虚拟化network functions virtualization (NFV): programmable services over white box networking, computation, storage
+
+#### The IP hourglass, at middle age
+
+Internet’s “thin waist”: 
+
+1. *one* network layer protocol: IP 
+
+2. *must* be implemented by every (billions) of Internet-connected devices
+
+Internet’s middle age “love handles”? 
+
+1. middleboxes, operating inside the network(NAT/IP/cashing/NFV/firewalls)
+
+#### Architectural Principles of the Internet
+
+Three cornerstone奠基石 beliefs:
+
+1. simple connectivity
+
+2. tool:IP protocol——that narrow waist
+
+3. intelligence:complexity at network edge(end to end rather than hidden in the network)
+
+
+#### The end-end argument
+
+所讨论的功能只有在通信系统端点处的应用程序的知识和帮助下才能完全且正确地实现。因此，将该有疑问的功能作为通信系统本身的一个特性是不可能的。（有时，由通信系统提供的该功能的不完整版本可能作为性能增强而有用。
+
+强调了某一特定功能只有借助通信系统端点处的应用程序的知识和帮助才能完全正确地实现，所以不能将这个功能作为通信系统自身的特性来提供。同时提到，通信系统提供的该功能的不完整版本在某些时候可能作为性能增强是有用的。
+
+在这段话中，“通信系统端点处的应用程序的知识和帮助” 可以从以下几个方面来理解：
+
+**一、知识方面**
+
+通信系统端点处的应用程序通常具有对特定业务逻辑、数据格式和处理要求的深入了解。
+
+例如，在一个文件传输应用中，端点处的应用程序知道如何对文件进行分割、打包、加密等操作，以适应特定的网络环境和传输要求。这种知识可能包括文件的结构、加密算法的细节、错误检测和纠正机制等。它是特定于该应用程序所处理的任务和数据类型的专业知识。
+
+**二、帮助方面**
+
+1. 数据处理协助
+   - 应用程序可以在数据传输的两端对数据进行预处理和后处理。在发送端，应用程序可能会压缩数据、添加校验码或进行数据加密，以提高传输效率和安全性。在接收端，应用程序则负责解压缩、校验数据完整性和解密等操作。这些处理过程对于确保数据的正确传输和使用至关重要，而通信系统本身可能并不具备这些特定的数据处理能力。
+   - 例如，视频会议应用程序在端点处可以对视频流进行编码和解码，以适应不同的网络带宽和设备性能。通信系统只负责传输经过编码的视频数据，而应用程序的编码和解码知识和操作帮助实现了视频会议的功能。
+2. 适应特定需求
+   - 不同的应用程序可能有不同的性能要求、可靠性需求和用户体验目标。端点处的应用程序可以根据这些特定需求与通信系统进行交互和协作。
+   - 比如，在线游戏应用程序需要低延迟的通信来保证实时性。应用程序可以通过与通信系统的交互，调整数据包的优先级、使用特定的网络协议或优化数据传输的时机，以满足游戏的低延迟要求。这种针对特定需求的调整和优化是通信系统端点处的应用程序提供的重要帮助。
+3. 错误处理和恢复
+   - 当通信过程中出现错误时，端点处的应用程序可以采取相应的错误处理措施。例如，如果数据包丢失或损坏，应用程序可以请求重传、使用纠错码进行恢复或采取其他策略来保证数据的完整性。通信系统可能只负责检测一些基本的错误，但具体的错误处理和恢复策略通常由应用程序来决定和执行。
+   - 以文件下载应用为例，如果下载过程中出现中断，应用程序可以记录下载进度，在网络恢复后从断点处继续下载。这种错误处理和恢复能力是应用程序为实现特定功能提供的重要帮助。
+
+综上所述，通信系统端点处的应用程序的知识和帮助对于实现特定功能至关重要。这些应用程序拥有特定于其任务的知识，并通过数据处理、适应特定需求和错误处理等方面的帮助，与通信系统协作，共同完成复杂的通信任务。而通信系统本身可能无法独立提供这些特定功能，需要依赖端点处的应用程序的知识和帮助。
+
+#### IP fragmentation/reassembly
+
+- network links have MTU (max. transfer size) - largest possible link-level frame
+
+  - different link types, different MTUs
+
+- large IP datagram divided (“fragmented”) within net
+
+  - one datagram becomes several datagrams
+
+  - “reassembled” only at *destination*
+
+  - IP header bits used to identify, order related fragments
 
 
 
 
-------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------
 
 [Jim Kurose Homepage (umass.edu)](https://gaia.cs.umass.edu/kurose_ross/index.php)
 
@@ -973,3 +2231,4 @@ Self-Assessment Quiz : small quiz for each chapter
 
 [moranzcw/Computer-Networking-A-Top-Down-Approach-NOTES: 《计算机网络－自顶向下方法(原书第6版)》编程作业，Wireshark实验文档的翻译和解答。 (github.com)](https://github.com/moranzcw/Computer-Networking-A-Top-Down-Approach-NOTES?tab=readme-ov-file)
 
+​              
