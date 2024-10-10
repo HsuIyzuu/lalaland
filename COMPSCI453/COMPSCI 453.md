@@ -1994,7 +1994,7 @@ local network:datagrams with source or destination in this network have 10.0.0/2
 
   - enable different network-layer treatment of “flows”
 
-![IPv6 datagram format](./assets/IPv6 datagram format-1728569693600-1.png)
+![IPv6 datagram format](./assets/IPv6 datagram format.png)
 
 What’s missing (compared with IPv4): 
 
