@@ -1,6 +1,4 @@
-# COMPSCI 453 
-
-## chapter1-Computer Networks and the Internet
+## chapter 1-Computer Networks and the Internet
 
 ### 1.1_What is the Internet
 
@@ -1417,7 +1415,6 @@ A:receiver controls sender, so sender won’t overflow receiver’s buffer by tr
 	//simultaneous
 	c->s:FINbit=1
 	s->c:FIN,ACK
-	
 ```
 
 #### Principles of congestion control
@@ -1608,7 +1605,7 @@ classDiagram
 
 ## Chapter 4-Network Layer:Data Plane
 
-### overview
+### 4.1_overview
 
 #### Network-layer services and protocols
 
@@ -1623,23 +1620,23 @@ classDiagram
   - examines header fields in all IP datagrams passing through it
   - moves datagrams from input ports to output ports to transfer datagrams along end-end path
 
+<a id="twokeynetworklayerfunctions"></a>
+
 #### Two key network-layer functions
 
-##### network-layer functions:
-
-- *forwarding:* move packets from a router’s input link to appropriate router output link将路由器里的包从input到output
-- *routing:* determine route taken by packets from source to destination一个路由器到另一个路由器
+- *forwarding:* move packets from a router’s input link to appropriate router output link在路由器里的传输包/data plane
+- *routing:* determine route taken by packets from source to destination一个路由器到另一个路由器/control plane
   - *routing algorithms*
 
 #### Network layer: data plane, control plane
 
-#### data plane
+##### data plane
 
 - *local*, per-router function
 
 - determines how datagram arriving on router input port is forwarded to router output port
 
-#### control plane
+##### control plane
 
 - *network-wide* logic
 
@@ -1647,23 +1644,20 @@ classDiagram
 
 - two control-plane approaches:
 
-  - *traditional routing algorithms:* implemented in routers
-    - 
+  - Per-router control plane(traditional)
+  
+    - Individual routing algorithm components *in each and every router* interact in the control plane
+  
     - 每个路由器里都算出路由表
     - 将路由器分在不同的 AS(Autonomous System) 里，每个 AS 去管理自己的路由器，那么路由器存的数据也就是 AS 里所有路由器的数据了
-
+  
   - *software-defined networking (SDN)*: implemented in (remote) servers
     - Remote controller computes, installs forwarding tables in routers
-- Per-router control plane
-  - Individual routing algorithm components *in each and every router* interact in the control plane
+    - Logically centralized control plane:一个独特的（通常的远程的）控制器与本地控制代理（control agent CAs）进行交互。
 
-- Logically centralized control plane
-  - 一个独特的（通常的远程的）控制器与本地控制代理（control agent CAs）进行交互。
+<u>Network-layer service model——transporting datagrams from sender to receiver</u>
 
-
-##### Network-layer service model——transporting datagrams from sender to receiver
-
-**Internet “best effort” service model**
+##### Internet “best effort” service model
 
 *No* guarantees on:
 
@@ -1673,7 +1667,7 @@ classDiagram
 
 3. <u>bandwidth</u> available to end-end flow
 
-advantsge:
+advantage:
 
 - <u>simplicity of mechanism</u> has allowed Internet to be widely deployed adopted机制简单
 
@@ -1683,7 +1677,7 @@ advantsge:
 
 - congestion control of “elastic” services helps弹性拥塞控制
 
-### What’s inside a router
+### 4.2_What’s inside a router
 
 #### input port function
 
@@ -1813,7 +1807,7 @@ deciding which packet to send next on link
   - each class, $i$, has weight, $w_i$ and gets weighted amount of service in each cycle$\frac{W_i}{\sum_jW_j}$
   - minimum bandwidth guarantee (per-traffic-class)
 
-### IP:the Internet Protocol
+### 4.3_IP:the Internet Protocol
 
 #### host, router network layer functions
 
@@ -2014,7 +2008,7 @@ What’s missing (compared with IPv4):
 
 **tunneling**:隧道是一种使用网络不支持的协议在该网络中传输数据的方法，工作原理是对数据包进行封装，将数据包包装在其他数据包内。经常用于VPN，在网络之间建立高效和安全的连接，从而使用本不受支持的网络协议，并在某些情况下允许用户绕过防火墙。封装的数据包本质上是另一个数据包内的数据包，在封装的数据包中，第一个数据包的标头和有效负载进入周围数据包的有效负载部分，原始数据包本身成为有效负载。E.g.IPv6成为IPv4的payload
 
-### Generalized forwarding,SDN
+### 4.4_Generalized forwarding,SDN
 
 #### match plus action
 
@@ -2090,7 +2084,7 @@ What’s missing (compared with IPv4):
 
 *today:* more generalized programming: P4 (see p4.org).
 
-### Middleboxes中间件
+### 4.5_Middleboxes中间件
 
 “any intermediary box performing functions apart from normal, standard functions of an IP router on the data path between a source host and destination host”
 
@@ -2185,33 +2179,632 @@ Three cornerstone奠基石 beliefs:
 
   - IP header bits used to identify, order related fragments
 
+## Chapter 5-Network Layer:Control Plane
 
+### roadmap
 
+- introduction
 
+- routing protocols
+  - link state
+  - distance vector
 
+- intra-ISP routing: OSPF
 
+- routing among ISPs: BGP
 
+- SDN control plane
 
+- Internet Control Message Protocol 
+- network management, configuration
+  - SNMP
+  - NETCONF/YANG
 
+### [5.1_Network-layer functions](#twokeynetworklayerfunctions)
 
+### 5.2_Routing protocols
 
+—— a “top-10” networking challenge!
 
+#### goal
 
+determine <u>“good” paths</u> (equivalently, routes), from sending hosts to receiving host, through network of routers
 
+- path: sequence of routers packets traverse from given initial source host to final destination host
 
+- “good”: “least cost”, “fastest”, “least congested”
 
+#### Routing algorithm classification
 
+**global**: all routers have *complete* topology, link cost info
 
+- [“link state” algorithms](#linkstate)
 
+**decentralized**: iterative process of computation, exchange of info with neighbors
 
+- routers initially only know link costs to attached neighbors
 
+- “distance vector” algorithms
 
+**static**: routes change slowly over time
 
+**dynamic**: routes change more quickly
 
+- periodic updates or in response to link cost changes
 
+<a id="linkstate"></a>
 
+#### Dijkstra’s link-state routing algorithm
 
+单源最短路径
 
+- centralized: network topology, link costs known to *all* nodes
+
+  - accomplished via “link state broadcast” 
+
+  - all nodes have same info
+
+- computes least cost paths from one node (“source”) to all other nodes
+  - gives *forwarding table* for that node
+
+- iterative迭代: after *k* iterations, know least cost path to *k* destinations
+
+##### notation
+
+$C_{x,y}$ : <u>direct</u> link cost from node $x$ to $y$ ; $=\infty$ if not direct neighbors.
+
+$D(v)$ : *current* estimate of cost of least-cost-path from source to destination $v$ .
+
+$p(v)$ : predecessor node along path from source to $v$ .
+
+$N'$ : set of nodes whose least-cost-path *definitively* known.
+
+##### pseudo code
+
+1. Initialization: $N'=\{u\}$   /*compute least-cost-path from $u$ to all other nodes */
+2. for all nodes $v$
+3. if $v$ adjacent to $u$  /*$u$ initially knows direct-path-cost only to direct neighbors */
+4. ​         then $D(v)=c_{u,v}$  /* but may not be *minimum* cost! */
+5. else $D(v)=\infty$
+6. 
+7. Loop
+8. find $w$ not in $N'$ such that $D(w)$ is a minimum
+9. add $w$ to $N'$
+10. update $D(v')$ for all $v$ adjacent to $w$ and not in $N'$:
+11. $D(v)=\min(D(v),D(w)+c_{w,v})$ /* new least-path-cost to $v$ is either old least-cost-path to $v$ or known least-cost-path to $w$ plus direct-cost from $w$ to $v$ */
+12. until all nodes in $N'$
+
+##### algorithm complexity(*n* nodes)
+
+each of $n$ iteration: need to check all nodes, $w$, not in $N$
+
+$n(n+1)/2$ comparisons: $O(n^2)$ complexity
+
+more efficient implementations possible: $O(n\log n)$
+
+##### message complexity
+
+each router must *broadcast* its link state information to other $n$ routers 
+
+efficient (and interesting!) broadcast algorithms: $O(n)$ link crossings to disseminate a broadcast message from one source
+
+each router’s message crosses $O(n)$ links: overall message complexity: $O(n^2)$
+
+##### oscillations possible可能的震荡
+
+1. 动态图，边的权重不断变化
+2. 特殊的负权重环
+
+<a id="bf"></a>
+
+#### *Bellman-Ford* (BF) equation
+
+##### notation
+
+$D_x(y)$ : cost of least-cost path from $x$ to $y$
+
+$\min_v$ : $\min$ taken over all neighbors $v$ of $x$
+
+$c_{x,y}$ : direct cost of link from $x$ to $y$
+
+$D_v(y)$ : $v$ 's estimated least-cost-path to $y$
+
+DV : distance vector
+
+Then:
+
+$D_x(y) = \min_v { \{ c_{x,y}+D_v(y) \}} $
+
+##### key idea
+
+- from time-to-time, each node sends its own distance vector estimate to neighbors
+- when $x$ receives new DV estimate from any neighbor, it updates its own DV using B-F equation: $D_x{y} \leftarrow \min_v { \{ c_{x,y}+D_v(y) \}}$ for each node $y \in N$
+- under minor, natural conditions, the estimate $D_x(y)$ converge to the actual least cost $d_x(y)$ 
+
+##### process
+
+1. ***wait*** for (change in local link cost or msg from neighbor)
+2. ***recompute*** DV estimates using DV received from neighbor
+3. if DV to any destination has changed, ***notify*** neighbors 
+4. loop above
+
+**iterative, asynchronous**不同时存在: each local iteration caused by
+
+- local link cost change 
+
+- DV update message from neighbor
+
+**distributed, self-stopping**: each node notifies neighbors *only* when its DV changes
+
+- neighbors then notify their neighbors – *only if necessary*
+
+- no notification received, no actions taken!
+
+##### link cost changes
+
+1. node detects local link cost change 
+
+2. updates routing info, recalculates local DV
+
+3. if DV changes, notify neighbors
+
+cost变小时：“good news travels fast”
+
+cost变大时：“bad news travels slow” – count-to-infinity
+
+#### Comparison of LS and DV algorithms
+
+##### message complexity
+
+LS: $n$ routers, $O(n^2)$ messages sent 
+
+DV: exchange between neighbors; convergence time varies
+
+##### speed of convergence
+
+LS: $O(n^2)$ algorithm, $O(n^2)$ messages
+
+- may have oscillations
+
+DV: convergence time varies
+
+- may have routing loops
+
+- count-to-infinity problem
+
+##### robustness:
+
+what happens if router malfunctions, or is compromised?
+
+LS: 
+
+- router can advertise incorrect *link* cost
+
+- each router computes only its *own* table
+
+DV:
+
+- DV router can advertise incorrect *path* cost (“I have a *really* low-cost path to everywhere”) : *black-holing*
+
+- each router’s DV is used by others : error propagate through network
+
+*<u>our routing study thus far - idealized</u>*——*<u>all routers identical</u>*&*<u>network “flat”</u>*
+
+### 5.3_intra-ISP routing: OSPF
+
+##### scenario
+
+Making routing scalable(billions of destinations)
+
+- can’t store all destinations in routing tables!
+
+- routing table exchange would swamp links!
+
+administrative autonomy
+
+- Internet: a network of networks
+
+- each network admin may want to control routing in its own network
+
+##### Internet approach
+
+aggregate routers into regions known as “autonomous systems” (AS) (aka. “domains”)
+
+1. intra-AS (aka “intra-domain”): routing among ==routers== *within same AS (“network”)*
+
+   <a id="intraas"></a>
+
+   - all routers in AS must run same intra-domain protocol
+   - routers in different AS can run different intra-domain routing protocols
+   - gateway router: at “edge” of its own AS, has link(s) to router(s) in other AS’es
+
+2. inter-AS (aka “inter-domain”): routing *among* ==AS’es==
+
+   <a id="interas"></a>
+
+   - gateways perform inter-domain routing (as well as intra-domain routing)
+   - router in AS1 receives datagram destined outside of AS1 learn which destinations reachable through AS2, which through AS3,propagate this reachability info to all routers in AS1
+   - Each router then locally runs Dijkstra’s shortest-path algorithm to determine a shortest-path tree to all *subnets*, with itself as the root node. 
+
+3. **forwarding table** configured by intra- and inter-AS routing algorithms
+
+   - intra-AS routing determine entries for destinations within AS
+   - inter-AS & intra-AS determine entries for external destinations
+
+4. Why **different** Intra-, Inter-AS routing ?
+
+**policy:**
+
+- inter-AS: admin wants control over how its traffic routed, who routes through its network 
+
+- intra-AS: single admin, so policy less of an issue
+
+**scale:**
+
+- hierarchical routing saves table size, reduced update traffic
+
+**performance:** 
+
+- intra-AS: can focus on performance
+
+- inter-AS: policy dominates over performance
+
+##### [Intra-AS routing: protocols](#intraas)
+
+RIP: Routing Information Protocol [RFC 1723]
+
+- classic DV: DVs exchanged every 30 secs
+
+- no longer widely used
+
+EIGRP: Enhanced Interior Gateway Routing Protocol
+
+- DV based
+
+- formerly Cisco-proprietary for decades (became open in 2013 [RFC 7868])
+
+ **OSPF: Open Shortest Path First** [RFC 2328]
+
+- link-state routing
+
+- IS-IS protocol (ISO standard, not RFC standard) essentially same as OSPF
+- “open”: publicly available
+- classic link-state 
+  - each router floods OSPF link-state advertisements (directly over IP rather than using TCP/UDP) to all other routers in entire AS
+  - multiple link costs metrics possible: bandwidth, delay
+  - each router has full topology, uses Dijkstra’s algorithm to compute forwarding table
+- *security:* all OSPF messages authenticated (to prevent malicious intrusion) 
+- two-level hierarchy: local area, backbone.
+  - link-state advertisements flooded only in area, or backbone
+  - each node has detailed area topology; only knows direction to reach other destinations
+
+![hierarchicalOSPF](./assets/hierarchicalOSPF-.png)
+
+### [5.4_routing among ISPs: BGP](#interas)
+
+> **BGP (Border Gateway Protocol)**
+>
+> *the* de facto inter-domain routing protocol
+>
+> “glue that holds the Internet together”
+
+- allows subnet to advertise its existence, and the destinations it can reach, to rest of Internet: *“I am here, here is who I can reach, and how”*
+
+- BGP provides each AS a means to:
+
+  - obtain destination network reachability info from neighboring ASes **(eBGP)**
+
+  - determine routes to other networks based on reachability information and *policy*
+
+  - propagate reachability information to all AS-internal routers **(iBGP)**
+
+  - advertise (to neighboring networks) destination reachability info
+  - Since an inter-AS routing protocol involves coordination among multiple ASs, communicating ASs must run the same inter-AS routing protocol. In fact, in the Internet, all ASs run the same inter-AS routing protocol, called the Border Gateway Protocol, more commonly known as **BGP** 
+
+##### basics
+
+BGP session: two BGP routers (“peers”) exchange BGP messages over semi-permanent TCP connection:
+
+- advertising *paths* to different destination network prefixes (BGP is a “path vector” protocol)
+
+##### protocol messages
+
+- OPEN: opens TCP connection to remote BGP peer and authenticates sending BGP peer
+
+- **UPDATE:** advertises new path (or withdraws old)
+
+- KEEPALIVE: keeps connection alive in absence of UPDATES; also ACKs OPEN request
+- NOTIFICATION: reports errors in previous msg; also used to close connection
+
+##### Path attributes and BGP routes
+
+- BGP advertised route: prefix + attributes 
+
+  - prefix: destination being advertised
+
+  - two important attributes:
+
+    - AS-PATH: list of ASes through which prefix advertisement has passed
+
+    - NEXT-HOP: indicates specific internal-AS router to next-hop AS
+
+- policy-based routing
+
+  - gateway receiving route advertisement uses *import policy* to accept/decline path (e.g., never route through AS Y).
+
+  - AS policy also determines whether to *advertise* path to other other neighboring ASes.
+  - hot potato routing: choose local gateway that has least *intra-domain* cost (e.g., 2d chooses 2a, even though more AS hops to *X*): don’t worry about inter-domain cost!
+
+  ##### BGP route selection
+
+router may learn about more than one route to destination AS, selects route based on:
+
+1. local preference value attribute: policy decision
+
+2. shortest AS-PATH 
+
+3. closest NEXT-HOP router: hot potato routing
+
+4. additional criteria 
+
+### 5.5_SDN control plane
+
+<u>Per-router control plane</u>
+
+Individual routing algorithm components *in each and every router* interact in the control plane to computer forwarding tables.
+
+<u>Software-Defined Networking (SDN) control plane</u>
+
+Remote controller computes, installs forwarding tables in routers.
+
+<u>Why a logically centralized control plane?</u>
+
+- easier network management: avoid router misconfigurations, greater flexibility of traffic flows
+
+- table-based forwarding (recall OpenFlow API) allows “programming” routers
+
+  - centralized “programming” easier: compute tables centrally and distribute
+
+  - distributed “programming” more difficult: compute tables as result of distributed algorithm (protocol) implemented in each-and-every router 
+
+- open (non-proprietary) implementation of control plane
+  - foster innovation: let 1000 flowers bloom
+
+![SDN](./assets/SDN.png)
+
+**Data-plane switches:**
+
+- fast, simple, commodity switches implementing generalized data-plane forwarding (Section 4.4) in hardware
+
+- flow (forwarding) table computed, installed under controller supervision
+
+- API for table-based switch control (e.g., OpenFlow)
+  - defines what is controllable, what is not
+
+- protocol for communicating with controller (e.g., OpenFlow)
+
+**SDN controller (network OS):** 
+
+- maintain network state information
+
+- interacts with network control applications “above” via northbound API
+
+- interacts with network switches “below” via southbound API
+
+- implemented as distributed system for performance, scalability, fault-tolerance, robustness
+
+- Components of SDN controller
+
+  - interface layer to network control apps: abstractions API
+
+  - network-wide state management : state of networks links, switches, services: a *distributed database*
+
+  - *communication*: communicate between SDN controller and controlled switches
+
+    - OpenFlow protocol
+
+      - operates between controller, switch
+
+      - TCP used to exchange messages
+
+        - optional encryption
+
+      - three classes of OpenFlow messages:
+
+        - controller-to-switch
+
+        - asynchronous (switch to controller)
+
+        - symmetric (misc.)
+
+      - distinct from OpenFlow API
+
+        - API used to specify generalized forwarding actions
+
+      - Key controller-to-switch messages
+
+        - *features:* controller queries switch features, switch replies
+
+        - *configure:* controller queries/sets switch configuration parameters
+
+        - *modify-state:* add, delete, modify flow entries in the OpenFlow tables
+
+        - *packet-out:* controller can send this packet out of specific switch port
+
+      - Key switch-to-controller messages
+
+        - §*packet-in:* transfer packet (and its control) to controller. See packet-out message from controller
+
+          §*flow-removed:* flow table entry deleted at switch
+
+          §*port status:* inform controller of a change on a port.
+
+- implementation in practice:OpenDaylight (ODL) controller&ONOS controller
+
+**network-control apps:**
+
+- “brains” of control: implement control functions using lower-level services, API provided by SDN controller
+
+- *unbundled:* can be provided by 3rd party: distinct from routing vendor, or SDN controller
+
+**SDN: selected challenges**
+
+- hardening the control plane: dependable, reliable, performance-scalable, secure distributed system
+
+  - robustness to failures: leverage strong theory of reliable distributed system for control plane
+
+  - dependability, security: “baked in” from day one? 
+
+- networks, protocols meeting mission-specific requirements
+
+  - e.g., real-time, ultra-reliable, ultra-secure
+
+- Internet-scaling: beyond a single AS
+
+- SDN critical in 5G cellular networks
+
+### 5.6_Internet Control Message Protocol
+
+- used by hosts and routers to communicate network-level information
+
+  - error reporting: unreachable host, network, port, protocol
+
+  - echo request/reply (used by ping)
+
+- network-layer “above” IP:
+  - ICMP messages carried in IP datagrams
+
+- *ICMP message:* type, code plus first 8 bytes of IP datagram causing error
+
+#### Traceroute and ICMP
+
+source sends sets of UDP segments to destination
+
+- 1st set has TTL =1, 2nd set has TTL=2, etc.
+
+datagram in *n*th set arrives to nth router:
+
+- router discards datagram and sends source ICMP message (type 11, code 0)
+
+- ICMP message possibly includes name of router & IP address
+
+when ICMP message arrives at source: record RTTs
+
+##### stopping criteria:
+
+1. UDP segment eventually arrives at destination host
+
+2. destination returns ICMP “port unreachable” message (type 3, code 3)
+
+3. source stops
+
+### 5.7_network management, configuration
+
+##### Components of network management
+
+**Managing server:** ①application, typically with network ②managers (humans) in the loop.
+
+**Network management protocol:** ①used by managing server to query, configure, manage device; ②used by devices to inform managing server of data, events.
+
+**Managed device:** equipment with manageable, configurable hardware, software components.
+
+**Data:** device “state” configuration data, operational data, device statistics
+
+#### Network operator approaches to management
+
+**CLI (Command Line Interface)** 
+
+operator issues (types, scripts) direct to individual devices (e.g., vis ssh)
+
+**SNMP/MIB** 
+
+operator queries/sets devices data (MIB) using Simple Network Management Protocol (SNMP)
+
+**NETCONF/YANG**
+
+- more abstract, network-wide, holistic
+
+- emphasis on multi-device configuration management. 
+
+<u>YANG:</u> data modeling language 
+
+<u>NETCONF:</u> communicate YANG-compatible actions/data to/from/among remote devices 
+
+#### SNMP
+
+Two ways to convey MIB info, commands: ①request/response mode ②trap mode
+
+| Message type                                   | Function                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| GetRequest<br>GetNextRequest<br>GetBulkRequest | manager-to-agent: “get me data”<br>(data instance, next data in list,  block of data). |
+| SetRequest                                     | manager-to-agent: set MIB value                              |
+| Response                                       | Agent-to-manager: value, response to Request                 |
+| Trap                                           | Agent-to-manager: inform manager                             |
+
+**Management Information Base (MIB)**
+
+- managed device’s operational (and some configuration) data
+
+- gathered into device MIB module
+  - 400 MIB modules defined in RFC’s; many more vendor-specific MIBs
+- Structure of Management Information (SMI): data definition language
+
+example MIB variables for UDP protocol:
+
+| Object ID       | Name            | Type           | Comments                                           |
+| --------------- | --------------- | -------------- | -------------------------------------------------- |
+| 1.3.6.1.2.1.7.1 | UDPInDatagrams  | 32-bit counter | total # datagrams delivered                        |
+| 1.3.6.1.2.1.7.2 | UDPNoPorts      | 32-bit counter | # undeliverable datagrams (no application at port) |
+| 1.3.6.1.2.1.7.3 | UDInErrors      | 32-bit counter | # undeliverable datagrams (all other reasons)      |
+| 1.3.6.1.2.1.7.4 | UDPOutDatagrams | 32-bit counter | total # datagrams sent                             |
+| 1.3.6.1.2.1.7.5 | udpTable        | SEQUENCE       | one entry for each port currently in use           |
+
+#### NETCONF
+
+- goal: actively manage/configure devices network-wide
+
+- operates between managing server and managed network devices
+
+  - actions: retrieve, set, modify, activate configurations
+
+  - atomic-commit actions over multiple devices
+
+  - query operational data and statistics
+
+  - subscribe to notifications from devices
+
+- remote procedure call (RPC) paradigm
+
+  - NETCONF protocol messages encoded in XML
+
+  - exchanged over secure, reliable transport (e.g., TLS) protocol
+
+**Selected NETCONF Operations**
+
+| NETCONF                               | Operation Description                                        |
+| ------------------------------------- | ------------------------------------------------------------ |
+| <get-config>                          | Retrieve all or part of a given configuration. A device may have multiple configurations. |
+| <get>                                 | Retrieve all or part of both configuration state and operational state data. |
+| <edit-config>                         | Change specified (possibly running) configuration at managed device. Managed device <rpc-reply> contains <ok> or <rpcerror> with rollback. |
+| <lock>, <unlock>                      | Lock (unlock) configuration datastore at managed device (to lock out NETCONF, SNMP, or CLIs commands from other sources). |
+| <create-subscription>, <notification> | Enable event notification subscription from managed device   |
+
+### YANG
+
+- data modeling language used to specify structure, syntax, semantics of NETCONF network management data
+  - built-in data types, like SMI
+
+- XML document describing device, capabilities can be generated from YANG description
+
+- can express constraints among data that must be satisfied by a valid NETCONF configuration
+  - ensure NETCONF configurations satisfy correctness, consistency constraints
+- YANG generated: NETCONF RPC message
+
+```html
+<edit-config>
+  YANG-generated XML
+</edit-config>
+```
 
 
 
